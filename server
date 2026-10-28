@@ -9,7 +9,8 @@ CYAN='\E[1;36m'
 WHITE='\E[1;37m'
 cRES='\E[0m'
 
-chmod 777 /tmp
+umask 077
+chmod 1777 /tmp
 architecture=$(dpkg --print-architecture)
 DEBIAN_CODENAME=$( . /etc/os-release && printf '%s' "$VERSION_CODENAME" )
 if [[ $DEBIAN_CODENAME != "trixie" ]]; then
@@ -160,19 +161,12 @@ if [[  -f "/opt/de_GWD/iptablesrules-up" ]]; then
   rm -rf /opt/de_GWD/Q4amSun
 fi
 
-if [[ -n $(systemctl list-units | grep 'pihole') ]]; then
-  systemctl stop pihole-FTL
-  rm -rf /etc/.pihole /etc/pihole /opt/pihole /usr/bin/pihole-FTL /usr/local/bin/pihole /var/www/html/admin /var/log/pihole* /etc/dnsmasq.d/*
-  rm -rf /etc/systemd/system/pihole-FTL.service
-  systemctl daemon-reload
-fi
 
 [[ ! -f "/var/www/ssl/de_GWD.cer" ]] && mv -f /var/www/ssl/*.cer /var/www/ssl/de_GWD.cer && sed -i '/ssl_certificate /c\ssl_certificate \/var\/www\/ssl\/de_GWD.cer;' /etc/nginx/conf.d/default.conf
 [[ ! -f "/var/www/ssl/de_GWD.key" ]] && mv -f /var/www/ssl/*.key /var/www/ssl/de_GWD.key && sed -i '/ssl_certificate_key /c\ssl_certificate_key \/var\/www\/ssl\/de_GWD.key;' /etc/nginx/conf.d/default.conf
 
-[[ -f "/etc/nginx/conf.d/merge.sh" ]] && rm -rf /etc/nginx/conf.d/*
+[[ -f "/etc/nginx/conf.d/merge.sh" ]] && rm -f /etc/nginx/conf.d/merge.sh
 
-rm -rf /var/log/auth.log
 rm -rf /usr/local/bin/autoUpdate
 rm -rf /usr/local/bin/iptablesrules*
 rm -rf /usr/local/bin/Q2H
@@ -343,10 +337,10 @@ rm -f /var/lib/dpkg/lock-frontend
 dpkg --configure -a
 
 cat << EOF >/etc/apt/sources.list
-deb http://deb.debian.org/debian trixie main contrib non-free non-free-firmware
-deb http://security.debian.org/debian-security trixie-security main contrib non-free non-free-firmware
-deb http://deb.debian.org/debian trixie-updates main contrib non-free non-free-firmware
-deb http://deb.debian.org/debian trixie-backports main contrib non-free non-free-firmware
+deb https://deb.debian.org/debian trixie main contrib non-free non-free-firmware
+deb https://security.debian.org/debian-security trixie-security main contrib non-free non-free-firmware
+deb https://deb.debian.org/debian trixie-updates main contrib non-free non-free-firmware
+deb https://deb.debian.org/debian trixie-backports main contrib non-free non-free-firmware
 EOF
 
 apt update --fix-missing && apt upgrade --allow-downgrades -y
@@ -481,8 +475,6 @@ sed -i '/dns-nameservers /d' /etc/network/interfaces
 resolvconf -u
 
 
-[[ -n $(which setenforce) ]] && setenforce 0
-[[ -f "/etc/selinux/config" ]] && sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
 
 [[ -f "/etc/ld.so.preload" ]] && sed -i "/libjemalloc/d" /etc/ld.so.preload
 ldconfig
@@ -490,7 +482,6 @@ ldconfig
 DPKGclean=$(dpkg --list | grep "^rc" | cut -d " " -f 3)
 [[ -n $DPKGclean ]] && echo $DPKGclean | xargs sudo dpkg --purge
 
-rm -rf /var/log/journal/*
 systemctl restart systemd-journald >/dev/null 2>&1
 
 localeSet=`cat << EOF
@@ -1095,11 +1086,11 @@ else
 systemctl force-reload nginx
 fi
 
-rm -rf /var/www/ssl/*.cer
-rm -rf /var/www/ssl/*.key
 find /var/www/ssl/*.pem | grep -v "dhparam.pem" | xargs -I {} rm -rf {}
 
-curl https://get.acme.sh | sh
+acmeInstaller=/tmp/acme-install.sh
+curl --fail --silent --show-error --location --proto =https --tlsv1.2 https://get.acme.sh -o "$acmeInstaller"
+sh "$acmeInstaller" && rm -f "$acmeInstaller" || { rm -f "$acmeInstaller"; return 1; }
 "/root/.acme.sh"/acme.sh --upgrade  --auto-upgrade
 "/root/.acme.sh"/acme.sh --set-default-ca  --server letsencrypt
 "/root/.acme.sh"/acme.sh --issue --dns dns_cf -d $topDomain -d *.$topDomain -k ec-256 --dnssleep 180
@@ -1109,7 +1100,8 @@ curl https://get.acme.sh | sh
                --reloadcmd     "systemctl force-reload nginx" \
                --ecc
 
-chmod 644 /var/www/ssl/*.key
+chmod 600 /var/www/ssl/*.key
+chown root:root /var/www/ssl/*.key
 }
 
 
@@ -1145,11 +1137,11 @@ else
 systemctl force-reload nginx
 fi
 
-rm -rf /var/www/ssl/*.cer
-rm -rf /var/www/ssl/*.key
 find /var/www/ssl/*.pem | grep -v "dhparam.pem" | xargs -I {} rm -rf {}
 
-curl https://get.acme.sh | sh
+acmeInstaller=/tmp/acme-install.sh
+curl --fail --silent --show-error --location --proto =https --tlsv1.2 https://get.acme.sh -o "$acmeInstaller"
+sh "$acmeInstaller" && rm -f "$acmeInstaller" || { rm -f "$acmeInstaller"; return 1; }
 "/root/.acme.sh"/acme.sh --upgrade  --auto-upgrade
 "/root/.acme.sh"/acme.sh --set-default-ca  --server letsencrypt
 "/root/.acme.sh"/acme.sh --issue -d $domain -w /var/www/html -k ec-256
@@ -1159,7 +1151,8 @@ curl https://get.acme.sh | sh
                --reloadcmd     "systemctl force-reload nginx" \
                --ecc
 
-chmod 644 /var/www/ssl/*.key
+chmod 600 /var/www/ssl/*.key
+chown root:root /var/www/ssl/*.key
 }
 
 
@@ -1434,7 +1427,8 @@ sslFolder=$(ls "/root/.acme.sh" | grep '_ecc')
 cp -f "/root/.acme.sh"/$sslFolder/fullchain.cer /var/www/ssl/de_GWD.cer
 cp -f "/root/.acme.sh"/$sslFolder/*.key /var/www/ssl/de_GWD.key
 
-chmod 644 /var/www/ssl/*.key
+chmod 600 /var/www/ssl/*.key
+chown root:root /var/www/ssl/*.key
 fi
 EOF
 chmod +x /opt/de_GWD/Qday
@@ -1931,14 +1925,14 @@ localAddr=$(echo $localAddrCIDR | cut -d/ -f1)
 
 if [[ $(cat /etc/os-release | grep VERSION= | cut -d'(' -f2 | cut -d')' -f1) == "stretch" ]]; then
 cat << EOF >/etc/apt/sources.list
-deb http://deb.debian.org/debian trixie main non-free-firmware
-deb-src http://deb.debian.org/debian trixie main non-free-firmware
+deb https://deb.debian.org/debian trixie main non-free-firmware
+deb-src https://deb.debian.org/debian trixie main non-free-firmware
 
-deb http://security.debian.org/debian-security/ trixie-security main non-free-firmware
-deb-src http://security.debian.org/debian-security/ trixie-security main non-free-firmware
+deb https://security.debian.org/debian-security/ trixie-security main non-free-firmware
+deb-src https://security.debian.org/debian-security/ trixie-security main non-free-firmware
 
-deb http://deb.debian.org/debian trixie-updates main non-free-firmware
-deb-src http://deb.debian.org/debian trixie-updates main non-free-firmware
+deb https://deb.debian.org/debian trixie-updates main non-free-firmware
+deb-src https://deb.debian.org/debian trixie-updates main non-free-firmware
 EOF
 
 sed -i "s/ stretch / buster /g" /etc/apt/sources.list.d/* >/dev/null 2>&1
@@ -1947,17 +1941,17 @@ apt full-upgrade -y && apt autoremove --purge -y && apt clean -y && apt autoclea
 fi
 
 cat << EOF >/etc/apt/sources.list
-deb http://deb.debian.org/debian trixie main non-free-firmware
-deb-src http://deb.debian.org/debian trixie main non-free-firmware
+deb https://deb.debian.org/debian trixie main non-free-firmware
+deb-src https://deb.debian.org/debian trixie main non-free-firmware
 
-deb http://security.debian.org/debian-security/ trixie-security main non-free-firmware
-deb-src http://security.debian.org/debian-security/ trixie-security main non-free-firmware
+deb https://security.debian.org/debian-security/ trixie-security main non-free-firmware
+deb-src https://security.debian.org/debian-security/ trixie-security main non-free-firmware
 
-deb http://deb.debian.org/debian trixie-updates main non-free-firmware
-deb-src http://deb.debian.org/debian trixie-updates main non-free-firmware
+deb https://deb.debian.org/debian trixie-updates main non-free-firmware
+deb-src https://deb.debian.org/debian trixie-updates main non-free-firmware
 
-deb http://deb.debian.org/debian trixie-backports main non-free-firmware
-deb-src http://deb.debian.org/debian trixie-backports main non-free-firmware
+deb https://deb.debian.org/debian trixie-backports main non-free-firmware
+deb-src https://deb.debian.org/debian trixie-backports main non-free-firmware
 EOF
 
 sed -i "s/ buster / trixie /g" /etc/apt/sources.list.d/* >/dev/null 2>&1
