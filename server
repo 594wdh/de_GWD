@@ -202,6 +202,7 @@ port=$(awk '/ssl .* reuseport/ {print$2}' /etc/nginx/conf.d/default.conf | grep 
 [[ -z $port ]] && port="443"
 
 path=$(jq -r '.inbounds[0].streamSettings.wsSettings.path' /opt/de_GWD/vtrui/config.json 2>/dev/null | grep -v '^null$')
+[[ $path =~ ^/[A-Za-z0-9._~/-]{1,128}$ ]] || path="/$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24)"
 uuids=$(jq -r '.inbounds[0].settings.clients[].id' /opt/de_GWD/vtrui/config.json 2>/dev/null | grep -v '^null$')
 }
 
@@ -210,7 +211,7 @@ uuids=$(jq -r '.inbounds[0].settings.clients[].id' /opt/de_GWD/vtrui/config.json
 preInstall(){
 sync; echo 3 >/proc/sys/vm/drop_caches >/dev/null 2>&1
 
-rm -rf /etc/resolv.conf
+if [[ ! -e /etc/resolv.conf.de_GWD.backup ]]; then cp -a /etc/resolv.conf /etc/resolv.conf.de_GWD.backup 2>/dev/null || true; fi
 cat << EOF >/etc/resolv.conf
 nameserver 1.1.1.1
 nameserver 8.8.8.8
@@ -344,7 +345,7 @@ deb https://deb.debian.org/debian trixie-backports main contrib non-free non-fre
 EOF
 
 apt update --fix-missing && apt upgrade --allow-downgrades -y
-apt full-upgrade -y && apt autoremove --purge -y && apt clean -y && apt autoclean -y
+apt full-upgrade -y && apt clean -y && apt autoclean -y
 
 pkgDEP
 
@@ -392,7 +393,7 @@ systemctl restart chrony
 systemctl enable chrony >/dev/null 2>&1
 
 
-rm -rf /etc/resolv.conf
+if [[ ! -e /etc/resolv.conf.de_GWD.backup ]]; then cp -a /etc/resolv.conf /etc/resolv.conf.de_GWD.backup 2>/dev/null || true; fi
 cat << EOF >/etc/resolv.conf
 nameserver 127.0.0.1
 EOF
@@ -454,14 +455,12 @@ systemctl restart unbound >/dev/null 2>&1
 systemctl enable unbound >/dev/null 2>&1
 
 rm -rf /etc/resolvconf/update.d/unbound >/dev/null 2>&1
-rm -rf /etc/systemd/resolved.conf >/dev/null 2>&1
 systemctl mask --now systemd-resolved >/dev/null 2>&1
 
-rm -rf /etc/resolvconf/resolv.conf.d/*
 >/etc/resolvconf/resolv.conf.d/original
 >/etc/resolvconf/resolv.conf.d/base
 >/etc/resolvconf/resolv.conf.d/tail
-rm -rf /etc/resolv.conf
+if [[ ! -e /etc/resolv.conf.de_GWD.backup ]]; then cp -a /etc/resolv.conf /etc/resolv.conf.de_GWD.backup 2>/dev/null || true; fi
 rm -rf /run/resolvconf/interface
 cat << EOF >/etc/resolvconf/resolv.conf.d/head
 nameserver 127.0.0.1
@@ -753,7 +752,8 @@ systemctl daemon-reload >/dev/null
 
 
 installNftables(){
-rm -rf /etc/nftables*
+mkdir -p /opt/de_GWD/backup/nftables
+cp -a /etc/nftables* /opt/de_GWD/backup/nftables/ 2>/dev/null || true
 rm -rf /opt/de_GWD/nftables
 mkdir -p /opt/de_GWD/nftables
 
@@ -883,7 +883,6 @@ StandardInput=null
 ProtectSystem=full
 ProtectHome=true
 ExecStart=/bin/bash -c '/etc/rc_online.local' ; /bin/bash -c '/opt/de_GWD/nftables/flowtable_eth.sh' ; /usr/sbin/nft -f /opt/de_GWD/nftables/default.nft
-ExecStop=/usr/sbin/nft flush ruleset
 
 [Install]
 WantedBy=sysinit.target
@@ -1409,9 +1408,6 @@ virtCON="openvz lxc lxc-libvirt systemd-nspawn docker podman rkt wsl proot pouch
 
 rm -rf ~/server*
 rm -rf ~/wget-log
-rm -rf /var/log/*1*
-rm -rf /var/log/*2*
-rm -rf /var/log/*.gz
 EOF
 chmod +x /opt/de_GWD/Q2H
 /opt/de_GWD/Q2H
@@ -1546,6 +1542,7 @@ port=$(echo $vpsdomainP | cut -d: -f2| grep '^[[:digit:]]*$')
 [[ -z $port ]] && port="443"
 
 path=$(jq -r '.inbounds[0].streamSettings.wsSettings.path' /opt/de_GWD/vtrui/config.json 2>/dev/null | grep -v '^null$')
+[[ $path =~ ^/[A-Za-z0-9._~/-]{1,128}$ ]] || path="/$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24)"
 
 if [[ $port = "443" ]]; then
 makeSSL_W
@@ -1761,9 +1758,21 @@ if [[ $tcpPFsw = "1" ]]; then
     echo -e "${GREEN}Local Port${cRES}"
     echo -e "${GREEN}======================= ${cRES}"
     read localP
+if [[ ! $localP =~ ^[0-9]{1,5}$ ]] || (( localP < 1 || localP > 65535 )); then
+  echo -e "${RED}Invalid local port${cRES}"
+  return 1
+fi
 
-upDomain=$(echo $upDomainP | cut -d: -f1)
-upPort=$(echo $upDomainP | cut -d: -f2| grep '^[[:digit:]]*$')
+if [[ ! $upDomainP =~ ^[A-Za-z0-9.-]+:[0-9]{1,5}$ ]]; then
+  echo -e "${RED}Invalid upstream address${cRES}"
+  return 1
+fi
+upDomain=${upDomainP%:*}
+upPort=${upDomainP##*:}
+if (( upPort < 1 || upPort > 65535 )); then
+  echo -e "${RED}Invalid upstream port${cRES}"
+  return 1
+fi
 
 unset aptPKG
 [[ -z $(dpkg -l | awk '{print$2}' | grep '^haproxy$') ]] && aptPKG+=(haproxy)
@@ -1858,6 +1867,7 @@ vpsdomainP=$vpsdomain:$port
 fi
 
 path=$(jq -r '.inbounds[0].streamSettings.wsSettings.path' /opt/de_GWD/vtrui/config.json 2>/dev/null | grep -v '^null$')
+[[ $path =~ ^/[A-Za-z0-9._~/-]{1,128}$ ]] || path="/$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24)"
 uuids=$(jq -r '.inbounds[0].settings.clients[].id' /opt/de_GWD/vtrui/config.json 2>/dev/null | grep -v '^null$')
 
 if [[ $(systemctl is-active 'haproxy') == "active" ]]; then
@@ -1937,7 +1947,7 @@ EOF
 
 sed -i "s/ stretch / buster /g" /etc/apt/sources.list.d/* >/dev/null 2>&1
 apt update --fix-missing && apt upgrade --allow-downgrades -y
-apt full-upgrade -y && apt autoremove --purge -y && apt clean -y && apt autoclean -y
+apt full-upgrade -y && apt clean -y && apt autoclean -y
 fi
 
 cat << EOF >/etc/apt/sources.list
@@ -1957,7 +1967,7 @@ EOF
 sed -i "s/ buster / trixie /g" /etc/apt/sources.list.d/* >/dev/null 2>&1
 sed -i "s/ bullseye / trixie /g" /etc/apt/sources.list.d/* >/dev/null 2>&1
 apt update --fix-missing && apt upgrade --allow-downgrades -y
-apt full-upgrade -y && apt autoremove --purge -y && apt clean -y && apt autoclean -y
+apt full-upgrade -y && apt clean -y && apt autoclean -y
 
 preInstall
 
@@ -2039,13 +2049,15 @@ VerCP=$(cat /tmp/de_GWD_Ver | sort -rV | uniq | awk NR==2)
 
 if [[ $VerCP == $localVer ]]; then
 rm -rf /tmp/autoUpdate
-wget -t 5 -T 10 -cqO /tmp/autoUpdate https://raw.githubusercontent.com/594wdh/de_GWD/main/server
+curl --fail --silent --show-error --location --proto =https --tlsv1.2 https://raw.githubusercontent.com/594wdh/de_GWD/main/server -o /tmp/autoUpdate
 
-if [[ $(du -sk /tmp/autoUpdate 2>/dev/null | awk '{print$1}') -gt 70 ]]; then
+if [[ $(du -sk /tmp/autoUpdate 2>/dev/null | awk '{print$1}') -gt 70 ]] && bash -n /tmp/autoUpdate; then
 sed -i '$d' /tmp/autoUpdate
 echo "updateGWD" >>  /tmp/autoUpdate
 chmod +x /tmp/autoUpdate
-/tmp/autoUpdate
+cp -f /opt/de_GWD/server /opt/de_GWD/server.backup 2>/dev/null || true
+mv -f /tmp/autoUpdate /opt/de_GWD/server
+/opt/de_GWD/server
 rm -rf /tmp/autoUpdate
 fi
 fi
