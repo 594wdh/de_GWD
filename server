@@ -11,6 +11,11 @@ cRES='\E[0m'
 
 chmod 777 /tmp
 architecture=$(dpkg --print-architecture)
+DEBIAN_CODENAME=$( . /etc/os-release && printf '%s' "$VERSION_CODENAME" )
+if [[ $DEBIAN_CODENAME != "trixie" ]]; then
+  echo "This installer supports Debian 13 (trixie) only."
+  exit 1
+fi
 [[ "openvz lxc lxc-libvirt systemd-nspawn docker podman proot pouch" =~ $(systemd-detect-virt) ]] && virt_type="container"
 export DEBIAN_FRONTEND=noninteractive
 branch="main"
@@ -56,7 +61,7 @@ unset aptPKG
 [[ -z $(dpkg -l | awk '{print$2}' | grep '^qrencode$') ]] && aptPKG+=(qrencode)
 [[ -z $(dpkg -l | awk '{print$2}' | grep '^sqlite3$') ]] && aptPKG+=(sqlite3)
 [[ -z $(dpkg -l | awk '{print$2}' | grep '^unbound$') ]] && aptPKG+=(unbound)
-[[ -z $(dpkg -l | awk '{print$2}' | grep '^libmimalloc2.0') ]] && aptPKG+=(libmimalloc2.0)
+[[ -z $(dpkg -l | awk '{print$2}' | grep '^libmimalloc3') ]] && aptPKG+=(libmimalloc3)
 [[ -z $(dpkg -l | awk '{print$2}' | grep '^irqbalance$') ]] && [[ $(nproc --all) -gt 1 ]] && aptPKG+=(irqbalance)
 [[ -n $aptPKG ]] && apt update && apt install $(echo ${aptPKG[@]})
 }
@@ -76,53 +81,53 @@ fi
 
 repoDL(){
 echo -e "${WHITE}[...]\c" && echo -e "\t${WHITE}Repository${cRES}\r\c"
-sha256sum_de_GWD=$(curl -fsSLo- https://raw.githubusercontent.com/jacyl4/de_GWD/$branch/de_GWD_"$architecture".zip.sha256sum)
-sha256sum_don_server=$(curl -fsSLo- https://raw.githubusercontent.com/jacyl4/de_GWD/$branch/resource/doh/doh_s_"$architecture".sha256sum)
-sha256sum_nginx=$(curl -fsSLo- https://raw.githubusercontent.com/jacyl4/de_GWD/$branch/resource/nginx/nginx_"$architecture".sha256sum)
-sha256sum_nginxConf=$(curl -fsSLo- https://raw.githubusercontent.com/jacyl4/de_GWD/$branch/resource/nginx/nginxConf.zip.sha256sum)
-sha256sum_sample=$(curl -fsSLo- https://raw.githubusercontent.com/jacyl4/de_GWD/$branch/resource/server/sample.zip.sha256sum)
+sha256sum_de_GWD=$(curl -fsSLo- https://raw.githubusercontent.com/594wdh/de_GWD/$branch/de_GWD_"$architecture".zip.sha256sum)
+sha256sum_don_server=$(curl -fsSLo- https://raw.githubusercontent.com/594wdh/de_GWD/$branch/resource/doh/doh_s_"$architecture".sha256sum)
+sha256sum_nginx=$(curl -fsSLo- https://raw.githubusercontent.com/594wdh/de_GWD/$branch/resource/nginx/nginx_"$architecture".sha256sum)
+sha256sum_nginxConf=$(curl -fsSLo- https://raw.githubusercontent.com/594wdh/de_GWD/$branch/resource/nginx/nginxConf.zip.sha256sum)
+sha256sum_sample=$(curl -fsSLo- https://raw.githubusercontent.com/594wdh/de_GWD/$branch/resource/server/sample.zip.sha256sum)
 
 if [[ $(checkSum /opt/de_GWD/doh-server $sha256sum_don_server) = "false" ]]; then
 rm -rf /tmp/doh-server
-wget --show-progress -cqO /tmp/doh-server https://raw.githubusercontent.com/jacyl4/de_GWD/$branch/resource/doh/doh_s_$architecture
+wget --show-progress -cqO /tmp/doh-server https://raw.githubusercontent.com/594wdh/de_GWD/$branch/resource/doh/doh_s_$architecture
 [[ $(checkSum /tmp/doh-server $sha256sum_don_server) = "false" ]] && echo -e "${RED}Download Failed${cRES}" && exit
 [[ $(checkSum /tmp/doh-server $sha256sum_don_server) = "true" ]] && mv -f /tmp/doh-server /opt/de_GWD/doh-server && chmod +x /opt/de_GWD/doh-server
 fi
 
 if [[ $(checkSum /usr/sbin/nginx $sha256sum_nginx) = "false" ]]; then
 rm -rf /tmp/nginx
-wget --show-progress -cqO /tmp/nginx https://raw.githubusercontent.com/jacyl4/de_GWD/$branch/resource/nginx/nginx_"$architecture"
+wget --show-progress -cqO /tmp/nginx https://raw.githubusercontent.com/594wdh/de_GWD/$branch/resource/nginx/nginx_"$architecture"
 [[ $(checkSum /tmp/nginx $sha256sum_nginx) = "false" ]] && echo -e "${RED}Download Failed${cRES}" && exit
 [[ $(checkSum /tmp/nginx $sha256sum_nginx) = "true" ]] && mv -f /tmp/nginx /usr/sbin/nginx && chmod +x /usr/sbin/nginx
 fi
 
 if [[ $(checkSum /opt/de_GWD/.repo/de_GWD.zip $sha256sum_de_GWD) = "false" ]]; then
 rm -rf /tmp/de_GWD.zip
-wget --show-progress -cqO /tmp/de_GWD.zip https://raw.githubusercontent.com/jacyl4/de_GWD/$branch/de_GWD_"$architecture".zip
+wget --show-progress -cqO /tmp/de_GWD.zip https://raw.githubusercontent.com/594wdh/de_GWD/$branch/de_GWD_"$architecture".zip
 [[ $(checkSum /tmp/de_GWD.zip $sha256sum_de_GWD) = "false" ]] && echo -e "${RED}Download Failed${cRES}" && exit
 [[ $(checkSum /tmp/de_GWD.zip $sha256sum_de_GWD) = "true" ]] && mv -f /tmp/de_GWD.zip /opt/de_GWD/.repo/de_GWD.zip
 fi
 
 if [[ $(checkSum /opt/de_GWD/.repo/nginxConf.zip $sha256sum_nginxConf) = "false" ]]; then
 rm -rf /tmp/nginxConf.zip
-wget --show-progress -cqO /tmp/nginxConf.zip https://raw.githubusercontent.com/jacyl4/de_GWD/$branch/resource/nginx/nginxConf.zip
+wget --show-progress -cqO /tmp/nginxConf.zip https://raw.githubusercontent.com/594wdh/de_GWD/$branch/resource/nginx/nginxConf.zip
 [[ $(checkSum /tmp/nginxConf.zip $sha256sum_nginxConf) = "false" ]] && echo -e "${RED}Download Failed${cRES}" && exit
 [[ $(checkSum /tmp/nginxConf.zip $sha256sum_nginxConf) = "true" ]] && mv -f /tmp/nginxConf.zip /opt/de_GWD/.repo/nginxConf.zip
 fi
 
 if [[ $(checkSum /opt/de_GWD/.repo/sample.zip $sha256sum_sample) = "false" ]]; then
 rm -rf /tmp/sample.zip
-wget --show-progress -cqO /tmp/sample.zip https://raw.githubusercontent.com/jacyl4/de_GWD/$branch/resource/server/sample.zip
+wget --show-progress -cqO /tmp/sample.zip https://raw.githubusercontent.com/594wdh/de_GWD/$branch/resource/server/sample.zip
 [[ $(checkSum /tmp/sample.zip $sha256sum_sample) = "false" ]] && echo -e "${RED}Download Failed${cRES}" && exit
 [[ $(checkSum /tmp/sample.zip $sha256sum_sample) = "true" ]] && mv -f /tmp/sample.zip /opt/de_GWD/.repo/sample.zip
 fi
 
 localVer=$(awk 'NR==1' /opt/de_GWD/version.php 2>/dev/null)
-remoteVer=$(curl -fsSLo- https://raw.githubusercontent.com/jacyl4/de_GWD/main/version.php | head -n 1)
+remoteVer=$(curl -fsSLo- https://raw.githubusercontent.com/594wdh/de_GWD/main/version.php | head -n 1)
 
 if [[ $localVer != $remoteVer ]]; then
 rm -rf /tmp/version.php
-wget --show-progress -cqO /tmp/version.php https://raw.githubusercontent.com/jacyl4/de_GWD/main/version.php
+wget --show-progress -cqO /tmp/version.php https://raw.githubusercontent.com/594wdh/de_GWD/main/version.php
 [[ $? -ne 0 ]] && echo -e "${WHITE}Version File${RED} Download Failed${cRES}" && exit
 [[ $(du -sk /tmp/version.php 2>/dev/null | awk '{print$1}') -ge 4 ]] && mv -f /tmp/version.php /opt/de_GWD/version.php
 fi
@@ -338,10 +343,10 @@ rm -f /var/lib/dpkg/lock-frontend
 dpkg --configure -a
 
 cat << EOF >/etc/apt/sources.list
-deb http://cloudfront.debian.net/debian bookworm main contrib non-free non-free-firmware
-deb http://cloudfront.debian.net/debian-security bookworm-security main contrib non-free non-free-firmware
-deb http://cloudfront.debian.net/debian bookworm-updates main contrib non-free non-free-firmware
-deb http://cloudfront.debian.net/debian bookworm-backports main contrib non-free non-free-firmware
+deb http://deb.debian.org/debian trixie main contrib non-free non-free-firmware
+deb http://security.debian.org/debian-security trixie-security main contrib non-free non-free-firmware
+deb http://deb.debian.org/debian trixie-updates main contrib non-free non-free-firmware
+deb http://deb.debian.org/debian trixie-backports main contrib non-free non-free-firmware
 EOF
 
 apt update --fix-missing && apt upgrade --allow-downgrades -y
@@ -1530,7 +1535,7 @@ fi
 
 
 installkernel(){
-bash <(wget --show-progress -cqO- https://raw.githubusercontent.com/jacyl4/de_GWD/main/resource/kernel/installkernel)
+bash <(wget --show-progress -cqO- https://raw.githubusercontent.com/594wdh/de_GWD/main/resource/kernel/installkernel)
 }
 
 
@@ -1926,14 +1931,14 @@ localAddr=$(echo $localAddrCIDR | cut -d/ -f1)
 
 if [[ $(cat /etc/os-release | grep VERSION= | cut -d'(' -f2 | cut -d')' -f1) == "stretch" ]]; then
 cat << EOF >/etc/apt/sources.list
-deb http://deb.debian.org/debian bookworm main non-free-firmware
-deb-src http://deb.debian.org/debian bookworm main non-free-firmware
+deb http://deb.debian.org/debian trixie main non-free-firmware
+deb-src http://deb.debian.org/debian trixie main non-free-firmware
 
-deb http://deb.debian.org/debian-security/ bookworm-security main non-free-firmware
-deb-src http://deb.debian.org/debian-security/ bookworm-security main non-free-firmware
+deb http://security.debian.org/debian-security/ trixie-security main non-free-firmware
+deb-src http://security.debian.org/debian-security/ trixie-security main non-free-firmware
 
-deb http://deb.debian.org/debian bookworm-updates main non-free-firmware
-deb-src http://deb.debian.org/debian bookworm-updates main non-free-firmware
+deb http://deb.debian.org/debian trixie-updates main non-free-firmware
+deb-src http://deb.debian.org/debian trixie-updates main non-free-firmware
 EOF
 
 sed -i "s/ stretch / buster /g" /etc/apt/sources.list.d/* >/dev/null 2>&1
@@ -1942,21 +1947,21 @@ apt full-upgrade -y && apt autoremove --purge -y && apt clean -y && apt autoclea
 fi
 
 cat << EOF >/etc/apt/sources.list
-deb http://deb.debian.org/debian bookworm main non-free-firmware
-deb-src http://deb.debian.org/debian bookworm main non-free-firmware
+deb http://deb.debian.org/debian trixie main non-free-firmware
+deb-src http://deb.debian.org/debian trixie main non-free-firmware
 
-deb http://deb.debian.org/debian-security/ bookworm-security main non-free-firmware
-deb-src http://deb.debian.org/debian-security/ bookworm-security main non-free-firmware
+deb http://security.debian.org/debian-security/ trixie-security main non-free-firmware
+deb-src http://security.debian.org/debian-security/ trixie-security main non-free-firmware
 
-deb http://deb.debian.org/debian bookworm-updates main non-free-firmware
-deb-src http://deb.debian.org/debian bookworm-updates main non-free-firmware
+deb http://deb.debian.org/debian trixie-updates main non-free-firmware
+deb-src http://deb.debian.org/debian trixie-updates main non-free-firmware
 
-deb http://deb.debian.org/debian bookworm-backports main non-free-firmware
-deb-src http://deb.debian.org/debian bookworm-backports main non-free-firmware
+deb http://deb.debian.org/debian trixie-backports main non-free-firmware
+deb-src http://deb.debian.org/debian trixie-backports main non-free-firmware
 EOF
 
-sed -i "s/ buster / bookworm /g" /etc/apt/sources.list.d/* >/dev/null 2>&1
-sed -i "s/ bullseye / bookworm /g" /etc/apt/sources.list.d/* >/dev/null 2>&1
+sed -i "s/ buster / trixie /g" /etc/apt/sources.list.d/* >/dev/null 2>&1
+sed -i "s/ bullseye / trixie /g" /etc/apt/sources.list.d/* >/dev/null 2>&1
 apt update --fix-missing && apt upgrade --allow-downgrades -y
 apt full-upgrade -y && apt autoremove --purge -y && apt clean -y && apt autoclean -y
 
@@ -2031,7 +2036,7 @@ enableAutoUpdate(){
 cat << "EOF" >/opt/de_GWD/autoUpdate
 #!/bin/bash
 localVer=$(awk 'NR==1' /opt/de_GWD/version.php)
-remoteVer=$(curl -fsSLo- https://raw.githubusercontent.com/jacyl4/de_GWD/main/version.php | head -n 1)
+remoteVer=$(curl -fsSLo- https://raw.githubusercontent.com/594wdh/de_GWD/main/version.php | head -n 1)
 
 echo $localVer >/tmp/de_GWD_Ver
 echo $remoteVer >>/tmp/de_GWD_Ver
@@ -2040,7 +2045,7 @@ VerCP=$(cat /tmp/de_GWD_Ver | sort -rV | uniq | awk NR==2)
 
 if [[ $VerCP == $localVer ]]; then
 rm -rf /tmp/autoUpdate
-wget -t 5 -T 10 -cqO /tmp/autoUpdate https://raw.githubusercontent.com/jacyl4/de_GWD/main/server
+wget -t 5 -T 10 -cqO /tmp/autoUpdate https://raw.githubusercontent.com/594wdh/de_GWD/main/server
 
 if [[ $(du -sk /tmp/autoUpdate 2>/dev/null | awk '{print$1}') -gt 70 ]]; then
 sed -i '$d' /tmp/autoUpdate
